@@ -16,7 +16,7 @@
 - **Backend**: Node.js + TypeScript + Express
 - **База данных**: PostgreSQL + Redis
 - **Хранилище**: MinIO (S3-совместимое)
-- **ИИ**: OpenAI API + собственные ML модели
+- **ИИ**: OpenAI API + OpenRouter.ai + собственные ML модели
 - **Коммуникация**: WebSocket + REST API
 
 ## 📋 Требования
@@ -35,10 +35,25 @@ cd slides_wanted
 ```
 
 ### 2. Настройка окружения
+
+#### OpenAI (по умолчанию)
 ```bash
 cp .env.example .env
 # Отредактируйте .env файл с вашими настройками
 ```
+
+#### 🆕 OpenRouter.ai (рекомендуется)
+Для доступа к 100+ AI моделям с автоматической оптимизацией стоимости:
+
+1. **Получите API ключ** на [OpenRouter.ai](https://openrouter.ai/keys)
+2. **Настройте .env:**
+   ```bash
+   OPENROUTER_ENABLED=true
+   OPENROUTER_API_KEY=sk-or-your-key-here
+   AI_DEFAULT_PROVIDER=openrouter
+   ```
+
+📚 [Подробная настройка OpenRouter](./docs/OPENROUTER_QUICK_SETUP.md)
 
 ### 3. Запуск инфраструктуры
 ```bash
@@ -84,6 +99,8 @@ slides_wanted/
 - [API Reference](./docs/API.md)
 - [Разработка](./docs/DEVELOPMENT.md)
 - [Деплой](./docs/DEPLOYMENT.md)
+- [🆕 OpenRouter интеграция](./docs/OPENROUTER_INTEGRATION.md)
+- [⚡ Быстрая настройка OpenRouter](./docs/OPENROUTER_QUICK_SETUP.md)
 
 ## 🤝 Вклад в проект
 

@@ -1,0 +1,33 @@
+# Development Dockerfile for Frontend
+FROM node:18-alpine
+
+# Устанавливаем необходимые пакеты
+RUN apk add --no-cache git python3 make g++
+
+# Создаем рабочую директорию
+WORKDIR /app
+
+# Копируем package.json и package-lock.json
+COPY package*.json ./
+
+# Устанавливаем зависимости
+RUN npm ci
+
+# Копируем исходный код
+COPY . .
+
+# Устанавливаем права доступа
+RUN chown -R node:node /app
+
+# Переключаемся на пользователя node
+USER node
+
+# Экспортируем порты
+EXPOSE 3001 3002
+
+# Команда по умолчанию для разработки
+CMD ["npm", "run", "dev"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3001/ || exit 1
