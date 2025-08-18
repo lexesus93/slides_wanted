@@ -26,19 +26,19 @@ export default defineConfig({
   server: {
     port: 3001,
     host: '0.0.0.0',
-    strictPort: true,
+    strictPort: false,
     hmr: {
-      port: 3002
+      port: 3001
     },
     // Проксирование API запросов к backend
     proxy: {
       '/api': {
-        target: 'http://backend:3000',
+        target: 'http://localhost:3000',
         changeOrigin: true,
         secure: false
       },
       '/socket.io': {
-        target: 'http://backend:3000',
+        target: 'http://localhost:3000',
         changeOrigin: true,
         ws: true
       }
