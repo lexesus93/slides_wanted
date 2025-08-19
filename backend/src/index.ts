@@ -87,7 +87,7 @@ class App {
     }));
 
     // CORS
-    this.app.use(cors(config.security.cors));
+    this.app.use(cors(config.security.cors as any));
 
     // Compression
     this.app.use(compression());

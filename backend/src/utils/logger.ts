@@ -52,7 +52,7 @@ if (config.logging.enableConsole) {
 if (config.logging.enableFile && config.logging.file) {
   logger.add(new winston.transports.File({
     filename: config.logging.file,
-    maxsize: config.logging.maxSize,
+    maxsize: parseInt(config.logging.maxSize as string) || 5242880,
     maxFiles: config.logging.maxFiles,
     format: logFormat
   }));

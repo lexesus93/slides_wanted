@@ -36,7 +36,7 @@
     "pdf-lib": "^1.17.1",
     "pg": "^8.11.3",
     "pptxgenjs": "^3.12.0",
-    "puppeteer": "^21.6.1",
+    "puppeteer": "^21.11.0",
     "redis": "^4.6.12",
     "sharp": "^0.33.1",
     "socket.io": "^4.7.4",

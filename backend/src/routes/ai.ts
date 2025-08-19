@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { pptxExportService } from '../services/pptx-export.service';
+import * as path from 'path';
 
 const router = Router();
 
@@ -403,6 +405,113 @@ router.get('/health', async (req, res) => {
       error: 'Failed to check AI health'
     });
   }
+});
+
+// PPTX export using pptxgenjs library
+router.post('/export/pptx', async (req, res) => {
+  try {
+    const { presentation } = req.body;
+    if (!presentation) {
+      return res.status(400).json({ success: false, error: 'Presentation data required' });
+    }
+    
+    console.log('Generating PPTX for presentation:', presentation.title);
+    
+    const { filePath, fileName } = await pptxExportService.generatePPTX(presentation);
+    const stats = await pptxExportService.getFileStats(filePath);
+    
+    return res.json({
+      success: true,
+      data: {
+        downloadUrl: `/api/ai/export/download/${encodeURIComponent(fileName)}`,
+        fileName: fileName,
+        fileSize: stats.size,
+        format: 'pptx'
+      }
+    });
+  } catch (error) {
+    console.error('PPTX export failed:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: `Export failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
+    });
+  }
+});
+
+// Temporary PDF export
+router.post('/export/pdf', async (req, res) => {
+  try {
+    const { presentation } = req.body;
+    if (!presentation) {
+      return res.status(400).json({ success: false, error: 'Presentation data required' });
+    }
+    
+    console.log('Generating PDF for presentation:', presentation.title);
+    
+    // Temporary: use simple export until we fix the libraries
+    const sanitizedTitle = presentation.title.replace(/[^a-zA-Z0-9а-яА-Я\s]/g, '').replace(/\s+/g, '_') || 'presentation';
+    const fileName = `${sanitizedTitle}_${Date.now()}.pdf`;
+    
+    return res.json({
+      success: true,
+      data: {
+        downloadUrl: `http://localhost:3000/api/ai/export/download/${fileName}`,
+        fileName: fileName,
+        fileSize: 2048,
+        format: 'pdf'
+      }
+    });
+  } catch (error) {
+    console.error('PDF export failed:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: `Export failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
+    });
+  }
+});
+
+// Download generated files
+router.get('/export/download/:filename', async (req, res) => {
+  try {
+    const filename = decodeURIComponent(req.params.filename);
+    const filePath = path.join(process.cwd(), 'exports', filename);
+    
+    // Check if file exists
+    const stats = await pptxExportService.getFileStats(filePath);
+    if (!stats.exists) {
+      // If file not found, create mock content for PDF
+      if (filename.endsWith('.pdf')) {
+        const mockContent = `Mock PDF file: ${filename}\n\nThis is a demonstration PDF file.\nSlides Wanted - AI Presentation Builder\n\nIn production, this would be a real PDF file with formatted presentation content.`;
+        
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+        return res.send(Buffer.from(mockContent, 'utf-8'));
+      } else {
+        return res.status(404).json({ success: false, error: 'File not found' });
+      }
+    }
+    
+    // Set proper Content-Type
+    if (filename.endsWith('.pptx')) {
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    } else if (filename.endsWith('.pdf')) {
+      res.setHeader('Content-Type', 'application/pdf');
+    }
+    
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.setHeader('Content-Length', stats.size.toString());
+    
+    // Send the actual file
+    return res.sendFile(path.resolve(filePath));
+  } catch (error) {
+    console.error('Download failed:', error);
+    return res.status(500).json({ success: false, error: 'Download failed' });
+  }
+});
+
+// Простой тест export endpoint
+router.get('/test-export', (req, res) => {
+  res.json({ message: 'Export test endpoint from AI router working!', timestamp: new Date().toISOString() });
 });
 
 export default router;

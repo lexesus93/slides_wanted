@@ -54,7 +54,13 @@ export interface AICompletionResponse {
 class ApiService {
   private async request<T>(endpoint: string, options?: RequestInit): Promise<ApiResponse<T>> {
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const url = `${API_BASE_URL}${endpoint}`;
+      console.log(`API Request: ${options?.method || 'GET'} ${url}`);
+      if (options?.body) {
+        console.log('API Request Body:', options.body);
+      }
+      
+      const response = await fetch(url, {
         headers: {
           'Content-Type': 'application/json',
           ...options?.headers,
@@ -62,11 +68,20 @@ class ApiService {
         ...options,
       });
 
+      console.log(`API Response Status: ${response.status} ${response.statusText}`);
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
+      console.log('API Response Data:', data);
+      
+      // Если backend уже возвращает объект с success и data, используем его напрямую
+      if (data && typeof data === 'object' && 'success' in data) {
+        return data;
+      }
+      
       return { success: true, data };
     } catch (error) {
       console.error('API Request failed:', error);
@@ -163,12 +178,79 @@ class ApiService {
     });
   }
 
-  async generatePresentation(topic: string): Promise<ApiResponse<any>> {
+  async generatePresentation(request: any): Promise<ApiResponse<any>> {
     return this.request('/api/ai/presentations/generate', {
       method: 'POST',
-      body: JSON.stringify({ topic }),
+      body: JSON.stringify(request),
     });
+  }
+
+  async generateSlideContent(slideTitle: string, presentationContext: string): Promise<ApiResponse<any>> {
+    return this.request('/api/ai/slides/generate', {
+      method: 'POST',
+      body: JSON.stringify({ 
+        slideTitle, 
+        presentationContext,
+        layout: 'content' 
+      }),
+    });
+  }
+
+  async generateSpeakerNotes(slideContent: any, presentationContext: string): Promise<ApiResponse<any>> {
+    return this.request('/api/ai/speaker-notes/generate', {
+      method: 'POST',
+      body: JSON.stringify({ 
+        slideContent, 
+        presentationContext 
+      }),
+    });
+  }
+
+  // Export methods
+  async exportToPPTX(presentation: any): Promise<ApiResponse<{ downloadUrl: string; fileName: string; fileSize: number; format: string }>> {
+    console.log('API Service: Sending PPTX export request:', { presentation });
+    const result = await this.request<{ downloadUrl: string; fileName: string; fileSize: number; format: string }>('/api/ai/export/pptx', {
+      method: 'POST',
+      body: JSON.stringify({ presentation }),
+    });
+    console.log('API Service: PPTX export result:', result);
+    return result;
+  }
+
+  async exportToPDF(presentation: any): Promise<ApiResponse<{ downloadUrl: string; fileName: string; fileSize: number; format: string }>> {
+    return this.request<{ downloadUrl: string; fileName: string; fileSize: number; format: string }>('/api/ai/export/pdf', {
+      method: 'POST',
+      body: JSON.stringify({ presentation }),
+    });
+  }
+
+  // Download file utility
+  downloadFile = async (url: string, filename: string): Promise<void> => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('Failed to download file:', error);
+      throw error;
+    }
   }
 }
 
 export const apiService = new ApiService();
+
+// Импортируем типы презентаций
+export type { Presentation, PresentationRequest, PresentationGenerationResponse } from '../types/presentation';
