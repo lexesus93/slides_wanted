@@ -28,6 +28,10 @@ export interface PresentationRequest {
   language?: string;
   includeImages?: boolean;
   includeSpeakerNotes?: boolean;
+  // Новые поля
+  requestField?: string;        // Поле запроса - идеи или структура слайдов
+  contextField?: string;        // Поле контекста - дополнительная информация
+  templateFile?: File | null;   // Файл шаблона презентации
 }
 
 export interface PresentationGenerationResponse {

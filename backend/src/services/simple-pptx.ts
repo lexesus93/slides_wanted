@@ -89,10 +89,10 @@ export class SimplePPTXGenerator {
   private createApp(presentation: any): string {
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>Slides Wanted</Application>
+  <Application></Application>
   <PresentationFormat>On-screen Show (4:3)</PresentationFormat>
   <Slides>${presentation.slides ? presentation.slides.length : 0}</Slides>
-  <Company>Slides Wanted</Company>
+  <Company></Company>
   <AppVersion>1.0.0000</AppVersion>
 </Properties>`;
   }
@@ -102,7 +102,7 @@ export class SimplePPTXGenerator {
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <dc:title>${this.escapeXML(presentation.title || 'Презентация')}</dc:title>
-  <dc:creator>${this.escapeXML(presentation.author || 'Slides Wanted')}</dc:creator>
+  <dc:creator>${this.escapeXML(presentation.author || '')}</dc:creator>
   <dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created>
   <dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified>
 </cp:coreProperties>`;

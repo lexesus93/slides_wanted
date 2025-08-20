@@ -48,7 +48,9 @@ const PresentationViewer: React.FC<PresentationViewerProps> = ({
     try {
       console.log('Exporting to PPTX:', presentation.title);
       console.log('Presentation data being sent:', presentation);
-      const response = await apiService.exportToPPTX(presentation);
+      let templateId: string | undefined;
+      try { templateId = localStorage.getItem('slides_wanted_templateId') || undefined; } catch {}
+      const response = await apiService.exportToPPTX(presentation, templateId);
       console.log('PPTX export response:', response);
       
       console.log('Checking response conditions:', {

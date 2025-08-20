@@ -92,6 +92,34 @@ class ApiService {
     }
   }
 
+  // Template methods
+  async uploadTemplate(file: File): Promise<ApiResponse<{ templateId: string; name: string }>> {
+    try {
+      const url = `${API_BASE_URL}/api/ai/templates/upload`;
+      const formData = new FormData();
+      formData.append('template', file);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Template upload failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  async getTemplateDetails(templateId: string): Promise<ApiResponse<any>> {
+    return this.request(`/api/ai/templates/${encodeURIComponent(templateId)}`);
+  }
+
   // Health checks
   async healthCheck(): Promise<ApiResponse<{ status: string; timestamp: string }>> {
     return this.request('/health');
@@ -185,33 +213,52 @@ class ApiService {
     });
   }
 
-  async generateSlideContent(slideTitle: string, presentationContext: string): Promise<ApiResponse<any>> {
+  async generateSlideContent(
+    slideNumber: number,
+    slideTitle: string, 
+    presentationContext: string,
+    requestField?: string,
+    contextField?: string,
+    layout: string = 'content'
+  ): Promise<ApiResponse<any>> {
     return this.request('/api/ai/slides/generate', {
       method: 'POST',
       body: JSON.stringify({ 
+        slideNumber,
         slideTitle, 
         presentationContext,
-        layout: 'content' 
+        requestField,
+        contextField,
+        layout
       }),
     });
   }
 
-  async generateSpeakerNotes(slideContent: any, presentationContext: string): Promise<ApiResponse<any>> {
+  async generateSpeakerNotes(
+    slideContent: any, 
+    presentationContext: string,
+    requestField?: string,
+    contextField?: string
+  ): Promise<ApiResponse<any>> {
     return this.request('/api/ai/speaker-notes/generate', {
       method: 'POST',
       body: JSON.stringify({ 
         slideContent, 
-        presentationContext 
+        presentationContext,
+        requestField,
+        contextField
       }),
     });
   }
 
   // Export methods
-  async exportToPPTX(presentation: any): Promise<ApiResponse<{ downloadUrl: string; fileName: string; fileSize: number; format: string }>> {
-    console.log('API Service: Sending PPTX export request:', { presentation });
+  async exportToPPTX(presentation: any, templateId?: string): Promise<ApiResponse<{ downloadUrl: string; fileName: string; fileSize: number; format: string }>> {
+    console.log('API Service: Sending PPTX export request:', { presentation, templateId });
+    const payload: any = { presentation };
+    if (templateId) payload.templateId = templateId;
     const result = await this.request<{ downloadUrl: string; fileName: string; fileSize: number; format: string }>('/api/ai/export/pptx', {
       method: 'POST',
-      body: JSON.stringify({ presentation }),
+      body: JSON.stringify(payload),
     });
     console.log('API Service: PPTX export result:', result);
     return result;

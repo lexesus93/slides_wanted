@@ -22,7 +22,10 @@ const PresentationCreator: React.FC<PresentationCreatorProps> = ({ onClose, onPr
         style: existingPresentation.style,
         language: 'ru',
         includeImages: false,
-        includeSpeakerNotes: true
+        includeSpeakerNotes: true,
+        requestField: '',
+        contextField: '',
+        templateFile: null
       };
     }
     return {
@@ -32,16 +35,82 @@ const PresentationCreator: React.FC<PresentationCreatorProps> = ({ onClose, onPr
       style: 'formal',
       language: 'ru',
       includeImages: false,
-      includeSpeakerNotes: true
+      includeSpeakerNotes: true,
+      requestField: '',
+      contextField: '',
+      templateFile: null
     };
   });
   const [generatedPresentation, setGeneratedPresentation] = useState<Presentation | null>(null);
+  const [uploadedTemplateId, setUploadedTemplateId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState(0);
 
   const handleInputChange = (field: keyof PresentationRequest, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Обработчик для загрузки файла шаблона
+  const handleTemplateFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    if (file && file.type !== 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
+      setError('Пожалуйста, выберите файл в формате .pptx');
+      return;
+    }
+    setFormData(prev => ({ ...prev, templateFile: file }));
+    setError('');
+
+    // Автоматически загружаем шаблон на backend, чтобы получить templateId
+    if (file) {
+      try {
+        const result = await apiService.uploadTemplate(file);
+        if (result.success && result.data) {
+          const anyData: any = result.data;
+          const templateId = anyData.templateId || anyData.data?.templateId;
+          if (templateId) {
+            setUploadedTemplateId(templateId);
+            try { localStorage.setItem('slides_wanted_templateId', templateId); } catch {}
+          }
+        }
+      } catch (e) {
+        console.error('Template upload failed:', e);
+      }
+    } else {
+      setUploadedTemplateId(null);
+      try { localStorage.removeItem('slides_wanted_templateId'); } catch {}
+    }
+  };
+
+  // Функция для очистки файла шаблона
+  const clearTemplateFile = () => {
+    setFormData(prev => ({ ...prev, templateFile: null }));
+  };
+
+  // Обработчики drag & drop
+  const handleDragOver = (event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.currentTarget.classList.add('drag-over');
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.currentTarget.classList.remove('drag-over');
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.currentTarget.classList.remove('drag-over');
+    
+    const files = Array.from(event.dataTransfer.files);
+    const file = files.find(f => f.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    
+    if (file) {
+      setFormData(prev => ({ ...prev, templateFile: file }));
+      setError('');
+    } else {
+      setError('Пожалуйста, перетащите файл в формате .pptx');
+    }
   };
 
   const handleGenerate = async () => {
@@ -58,94 +127,88 @@ const PresentationCreator: React.FC<PresentationCreatorProps> = ({ onClose, onPr
     try {
       console.log('Generating presentation with data:', formData);
       
+      // Логируем новые поля для отладки
+      if (formData.requestField?.trim()) {
+        console.log('Request field provided:', formData.requestField);
+      }
+      if (formData.contextField?.trim()) {
+        console.log('Context field provided:', formData.contextField);
+      }
+      if (formData.templateFile) {
+        console.log('Template file provided:', formData.templateFile.name);
+      }
+      
       // Имитируем прогресс
       const progressInterval = setInterval(() => {
         setProgress(prev => Math.min(prev + 10, 90));
       }, 500);
 
-      const response = await apiService.generatePresentation(formData);
+      // Включаем templateId, если он уже загружен
+      const requestPayload: any = { ...formData };
+      if (uploadedTemplateId) requestPayload.templateId = uploadedTemplateId;
+
+      const response = await apiService.generatePresentation(requestPayload);
       
       clearInterval(progressInterval);
       setProgress(100);
 
       if (response.success && response.data) {
-        // Генерируем слайды на основе указанного количества
-        const generateSlides = () => {
-          const slides = [];
-          
-          // Первый слайд - всегда титульный
-          slides.push({
-            id: '1',
-            title: formData.topic,
-            content: [`Презентация на тему "${formData.topic}"`, `Для аудитории: ${formData.audience}`],
-            layout: 'title' as const
-          });
+        // Используем контент, сгенерированный на backend, без подмены шаблонными слайдами
+        const backendData: any = response.data;
+        const backendSlides: any[] = Array.isArray(backendData.slides) ? backendData.slides : [];
 
-          // Генерируем остальные слайды
-          const remainingSlides = formData.slideCount - 1;
-          const slideTemplates = [
-            { title: 'Введение', content: ['Основные темы для обсуждения', 'Цели и задачи', 'Структура презентации'], layout: 'content' as const },
-            { title: 'Проблематика', content: ['Текущее состояние', 'Выявленные проблемы', 'Необходимость решения'], layout: 'content' as const },
-            { title: 'Анализ ситуации', content: ['Детальный анализ', 'Ключевые факторы', 'Статистические данные'], layout: 'two-column' as const },
-            { title: 'Предлагаемое решение', content: ['Основная концепция', 'Методы реализации', 'Ожидаемые результаты'], layout: 'content' as const },
-            { title: 'Преимущества', content: ['Основные преимущества', 'Конкурентные особенности', 'Добавленная стоимость'], layout: 'content' as const },
-            { title: 'Практическое применение', content: ['Примеры использования', 'Кейсы и результаты', 'Практические рекомендации'], layout: 'two-column' as const },
-            { title: 'Планы и перспективы', content: ['Краткосрочные цели', 'Долгосрочная стратегия', 'Развитие проекта'], layout: 'content' as const },
-            { title: 'Ресурсы и бюджет', content: ['Необходимые ресурсы', 'Финансовые затраты', 'ROI и окупаемость'], layout: 'two-column' as const },
-            { title: 'Риски и митигация', content: ['Основные риски', 'Стратегии снижения', 'План резервирования'], layout: 'content' as const },
-            { title: 'Команда проекта', content: ['Ключевые участники', 'Роли и ответственность', 'Экспертиза команды'], layout: 'content' as const },
-            { title: 'Временные рамки', content: ['Основные этапы', 'Ключевые вехи', 'График реализации'], layout: 'two-column' as const },
-            { title: 'Критерии успеха', content: ['KPI и метрики', 'Показатели эффективности', 'Методы измерения'], layout: 'content' as const },
-            { title: 'Следующие шаги', content: ['Немедленные действия', 'Планы на ближайший период', 'Долгосрочные цели'], layout: 'content' as const },
-            { title: 'Вопросы и обсуждение', content: ['Открытые вопросы', 'Обратная связь', 'Дискуссия'], layout: 'content' as const },
-            { title: 'Выводы', content: ['Ключевые выводы', 'Рекомендации', 'Значимость результатов'], layout: 'conclusion' as const },
-            { title: 'Заключение', content: ['Подведение итогов', 'Основные достижения', 'Благодарности'], layout: 'conclusion' as const }
-          ];
-
-          // Выбираем нужное количество слайдов (исключая заключение)
-          let selectedTemplates = slideTemplates.slice(0, Math.max(0, remainingSlides - 1));
-          
-          // Добавляем заключительный слайд
-          if (remainingSlides > 0) {
-            selectedTemplates.push(slideTemplates[slideTemplates.length - 1]); // Заключение
+        const normalizedSlides = backendSlides.map((s: any, idx: number) => {
+          const rawContent = s.content;
+          let contentArray: string[] = [];
+          if (Array.isArray(rawContent)) {
+            // Преобразуем массив, где элементы могут быть строками или объектами
+            contentArray = rawContent.flatMap((item: any) => {
+              if (typeof item === 'string') return [item];
+              if (item == null) return [];
+              if (typeof item === 'object') {
+                // Поддержка иерархических списков: { text, children: [] }
+                const text = item.text || item.title || item.heading || '';
+                const lines = [text].filter(Boolean);
+                if (Array.isArray(item.children)) {
+                  const childLines = item.children
+                    .map((c: any) => (typeof c === 'string' ? `  - ${c}` : (c?.text ? `  - ${c.text}` : null)))
+                    .filter(Boolean) as string[];
+                  return [...lines, ...childLines];
+                }
+                return lines;
+              }
+              return [String(item)];
+            }).filter((l: string) => l && l.trim());
+          } else if (typeof rawContent === 'string') {
+            contentArray = rawContent.split('\n').filter((l) => l.trim());
+          } else if (rawContent != null) {
+            contentArray = [String(rawContent)].filter(Boolean);
           }
 
-          // Добираем слайды если нужно больше
-          while (selectedTemplates.length < remainingSlides) {
-            const randomTemplate = slideTemplates[Math.floor(Math.random() * (slideTemplates.length - 2))];
-            selectedTemplates.push({
-              ...randomTemplate,
-              title: `${randomTemplate.title} (часть ${selectedTemplates.length + 1})`
-            });
-          }
+          return {
+            id: String(idx + 1),
+            title: s.title || `Слайд ${idx + 1}`,
+            content: contentArray,
+            layout: (s.layout as any) || 'content',
+            notes: s.speakerNotes as string | undefined
+          };
+        });
 
-          // Добавляем в массив слайдов
-          selectedTemplates.slice(0, remainingSlides).forEach((template, index) => {
-            slides.push({
-              id: (index + 2).toString(),
-              title: template.title,
-              content: template.content,
-              layout: template.layout
-            });
-          });
-
-          return slides;
-        };
-
-        // Создаем презентацию из ответа backend
-        const mockPresentation: Presentation = {
+        const built: Presentation = {
           id: Date.now().toString(),
-          title: formData.topic,
-          subtitle: `Презентация для ${formData.audience}`,
+          title: backendData.title || formData.topic,
+          subtitle: backendData.summary ? String(backendData.summary) : `Презентация для ${formData.audience}`,
           author: 'AI Assistant',
           audience: formData.audience,
           style: formData.style as any,
-          slides: generateSlides(),
+          slides: normalizedSlides.length > 0 ? normalizedSlides : [
+            { id: '1', title: formData.topic, content: [formData.topic], layout: 'title' as const }
+          ],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
 
-        setGeneratedPresentation(mockPresentation);
+        setGeneratedPresentation(built);
         setStep('preview');
       } else {
         setError(response.error || 'Ошибка при генерации презентации');
@@ -177,6 +240,91 @@ const PresentationCreator: React.FC<PresentationCreatorProps> = ({ onClose, onPr
           onChange={(e) => handleInputChange('topic', e.target.value)}
           placeholder="Например: Искусственный интеллект в медицине"
         />
+      </div>
+
+      {/* Новое поле запроса */}
+      <div className="form-group">
+        <label>
+          💡 Поле запроса
+          <span className="field-description">
+            Опишите идеи для презентации или уже готовую структуру слайдов
+          </span>
+        </label>
+        <textarea
+          value={formData.requestField || ''}
+          onChange={(e) => handleInputChange('requestField', e.target.value)}
+          placeholder="Например: 
+- Слайд 1: Введение в проблему
+- Слайд 2: Анализ текущего состояния
+- Слайд 3: Предлагаемое решение
+или просто опишите ваши идеи..."
+          rows={4}
+          className="textarea-field"
+        />
+      </div>
+
+      {/* Новое поле контекста */}
+      <div className="form-group">
+        <label>
+          📋 Поле контекста
+          <span className="field-description">
+            Дополнительная информация, которая поможет в создании презентации
+          </span>
+        </label>
+        <textarea
+          value={formData.contextField || ''}
+          onChange={(e) => handleInputChange('contextField', e.target.value)}
+          placeholder="Например: ключевые факты, статистика, особенности аудитории, корпоративные требования, предыдущие исследования..."
+          rows={3}
+          className="textarea-field"
+        />
+      </div>
+
+      {/* Новое поле для загрузки шаблона */}
+      <div className="form-group">
+        <label>
+          🎨 Шаблон презентации
+          <span className="field-description">
+            Загрузите файл .pptx для использования его стилей и макетов
+          </span>
+        </label>
+        <div className="file-upload-container">
+          <input
+            type="file"
+            accept=".pptx"
+            onChange={handleTemplateFileChange}
+            className="file-input"
+            id="template-file"
+          />
+          <label 
+            htmlFor="template-file" 
+            className="file-upload-label"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            {formData.templateFile ? (
+              <span className="file-selected">
+                📎 {formData.templateFile.name}
+                <button 
+                  type="button" 
+                  onClick={clearTemplateFile}
+                  className="clear-file-btn"
+                  title="Удалить файл"
+                >
+                  ✕
+                </button>
+              </span>
+            ) : (
+              <span className="file-placeholder">
+                📁 Выберите файл .pptx или перетащите сюда
+              </span>
+            )}
+          </label>
+          <div className="file-upload-note">
+            💡 В будущем: поддержка .txt, .pdf файлов для анализа контекста
+          </div>
+        </div>
       </div>
 
       <div className="form-row">
