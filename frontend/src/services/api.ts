@@ -126,7 +126,15 @@ class ApiService {
   }
 
   async aiHealthCheck(): Promise<ApiResponse<{ message: string; endpoints: string[] }>> {
-    return this.request('/api/ai/status');
+    const res = await this.request('/api/ai/status');
+    if (!res.success) {
+      // Fallback: some builds expose only /api/ai/health
+      const fallback = await this.request('/api/ai/health');
+      if (fallback.success) {
+        return { success: true, data: { message: 'AI health OK', endpoints: [] } };
+      }
+    }
+    return res;
   }
 
   // AI API methods

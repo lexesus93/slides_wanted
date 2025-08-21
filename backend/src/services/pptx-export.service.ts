@@ -43,7 +43,7 @@ export class PPTXExportService {
 
     const masterNames: string[] = [];
     if (options?.templateStyles?.masterLayouts && options.templateStyles.masterLayouts.length > 0) {
-      options.templateStyles.masterLayouts.forEach((layoutId, index) => {
+      options.templateStyles.masterLayouts.forEach((_layoutId, index) => {
         const masterName = `MASTER_${index}`;
         masterNames.push(masterName);
         pptx.defineSlideMaster({
@@ -145,32 +145,82 @@ export class PPTXExportService {
         valign: 'top'
       });
     } else {
-      // Multiple lines - create bullet points with hierarchical support
-      const bulletPoints = contentLines.map(rawLine => {
-        const match = rawLine.match(/^(\s*)([-•–]?\s*)?(.*)$/);
-        const leadingSpaces = match && typeof match[1] === 'string' ? match[1].length : 0;
-        const textPart = match && typeof match[3] === 'string' ? match[3] : rawLine;
-        const indentLevel = Math.min(Math.floor(leadingSpaces / 2), 5);
-        return {
-          text: String(textPart || '').trim(),
-          options: {
-            bullet: true,
-            indentLevel,
-            fontSize: 16,
-            color: theme?.bulletColor || theme?.textColor || '444444',
-            fontFace: theme?.fontName
+      // Detect Markdown-like table
+      const hasSecondLine = contentLines.length >= 2;
+      const firstHasPipe = contentLines[0]?.includes?.('|') === true;
+      const secondMatchesRule = hasSecondLine && typeof contentLines[1] === 'string' && /\|?\s*[-:]+\s*(\|\s*[-:]+\s*)+\|?/.test(contentLines[1]);
+      const looksLikeTable = firstHasPipe && secondMatchesRule;
+      if (looksLikeTable) {
+        // Parse table
+        const rows = contentLines
+          .filter((l) => typeof l === 'string' && /\|/.test(l))
+          .map((l) => (l || '').replace(/^\||\|$/g, '').split('|').map((c) => (c || '').trim()));
+        // Draw simple table
+        const numCols = Math.max(1, ...rows.map(r => (Array.isArray(r) ? r.length : 0)));
+        const colW = 9 / Math.max(1, numCols);
+        const startY = 2.0;
+        const rowH = 0.5;
+        rows.forEach((row, rIdx) => {
+          (row || []).forEach((cell, cIdx) => {
+            slide.addText(String(cell ?? ''), {
+              x: 0.5 + cIdx * colW,
+              y: startY + rIdx * rowH,
+              w: colW,
+              h: rowH,
+              fontSize: 14,
+              color: theme?.textColor || '444444',
+              fontFace: theme?.fontName,
+              align: 'left',
+              valign: 'middle',
+              fill: { color: rIdx === 0 ? (theme?.primaryColor || 'EEEEEE') : 'FFFFFF' },
+              line: { color: theme?.textColor || '999999', width: 0.5 }
+            });
+          });
+        });
+      } else {
+        // Multiple lines - create bullet points with hierarchical support
+        const bulletPoints = contentLines.map(rawLine => {
+          const line = String(rawLine ?? '');
+          const mNum = line.match(/^(\s*)(\d+)\.\s+(.*)$/); // numbered list
+          if (mNum && typeof mNum[1] === 'string') {
+            const indentLevel = Math.min(Math.floor(mNum[1].length / 2), 5);
+            return {
+              text: String(mNum[3] ?? '').trim(),
+              options: {
+                bullet: { type: 'number' },
+                indentLevel,
+                fontSize: 16,
+                color: theme?.bulletColor || theme?.textColor || '444444',
+                fontFace: theme?.fontName
+              }
+            } as any;
           }
-        } as any;
-      });
 
-      slide.addText(bulletPoints as any, {
-        x: 0.5,
-        y: 2.0,
-        w: 9,
-        h: 4,
-        color: theme?.textColor || '444444',
-        valign: 'top'
-      });
+          const match = line.match(/^(\s*)([-•–*]?\s*)?(.*)$/);
+          const leadingSpaces = match && typeof match[1] === 'string' ? match[1].length : 0;
+          const textPart = match && typeof match[3] === 'string' ? match[3] : line;
+          const indentLevel = Math.min(Math.floor(leadingSpaces / 2), 5);
+          return {
+            text: String(textPart || '').trim(),
+            options: {
+              bullet: true,
+              indentLevel,
+              fontSize: 16,
+              color: theme?.bulletColor || theme?.textColor || '444444',
+              fontFace: theme?.fontName
+            }
+          } as any;
+        });
+
+        slide.addText(bulletPoints as any, {
+          x: 0.5,
+          y: 2.0,
+          w: 9,
+          h: 4,
+          color: theme?.textColor || '444444',
+          valign: 'top'
+        });
+      }
     }
 
     // Add slide number

@@ -229,6 +229,22 @@ router.post('/presentations/generate', async (req, res) => {
     if (templateFile) console.log('- Template file provided:', templateFile);
     if (templateId) console.log('- Template ID provided:', templateId);
 
+    // Фиксируем возможную кривую кодировку (mojibake) для кириллицы
+    const fixMojibake = (s?: string) => {
+      if (!s || typeof s !== 'string') return s;
+      try {
+        // Перекодируем предполагаемую Latin-1 в UTF-8 и выбираем вариант с большим числом кириллицы
+        const recoded = Buffer.from(s, 'latin1').toString('utf8');
+        const countCyr = (t: string) => (t.match(/[А-Яа-яЁё]/g) || []).length;
+        return countCyr(recoded) > countCyr(s) ? recoded : s;
+      } catch {
+        return s;
+      }
+    };
+
+    const cleanRequestField = fixMojibake(requestField);
+    const cleanContextField = fixMojibake(contextField);
+
     // Используем AI сервис для генерации презентации со всеми полями
     const presentation = await aiService.generatePresentation({
       topic,
@@ -238,8 +254,8 @@ router.post('/presentations/generate', async (req, res) => {
       language,
       includeImages,
       includeSpeakerNotes,
-      requestField,
-      contextField,
+      requestField: cleanRequestField,
+      contextField: cleanContextField,
       templateFile,
       templateId
     });

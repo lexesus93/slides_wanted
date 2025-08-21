@@ -282,28 +282,74 @@ ${request.contextField.trim()}`;
    * Fallback генерация презентации
    */
   private generateFallbackPresentation(request: PresentationRequest): any {
-    const slides = [];
+    const slides = [] as any[];
     
     // Анализируем поле запроса для извлечения структуры слайдов
     let customSlides: any[] = [];
     if (request.requestField?.trim()) {
-      const lines = request.requestField.split('\n').filter((line: string) => line.trim());
-      customSlides = lines
-        .filter((line: string) => line.includes('Слайд') || line.includes('-'))
-        .map((line: string, index: number) => {
-          const title = line.replace(/^-\s*/, '').replace(/Слайд \d+:\s*/, '').trim();
-          return {
-            slideNumber: index + 1,
-            title: title || `Слайд ${index + 1}`,
-            content: [
-              `Контент для: ${title}`,
-              ...(request.contextField?.trim() ? 
-                [`Учитывая контекст: ${request.contextField.substring(0, 100)}...`] : [])
-            ],
-            layout: 'content',
-            speakerNotes: `Заметки для слайда "${title}". ${request.contextField || ''}`
-          };
+      const text = request.requestField;
+      const lines = text.split('\n');
+      // Грубое разбиение на секции по заголовкам Markdown или явным меткам слайдов
+      const sections: { title: string; body: string[] }[] = [];
+      let current: { title: string; body: string[] } | null = null;
+      lines.forEach((raw: string) => {
+        const line = raw.trimEnd();
+        const h = line.match(/^\s{0,3}(#{1,6})\s+(.*)$/); // # Заголовок
+        const slideTag = line.match(/^\s*(Слайд\s*\d+[:.-]?\s*)(.*)$/i);
+        if (h) {
+          if (current) sections.push(current);
+          const heading = typeof h[2] === 'string' ? h[2].trim() : 'Секция';
+          current = { title: heading || 'Секция', body: [] };
+        } else if (slideTag) {
+          if (current) sections.push(current);
+          const t2 = typeof slideTag[2] === 'string' ? slideTag[2].trim() : '';
+          const t1 = typeof slideTag[1] === 'string' ? slideTag[1].trim() : '';
+          current = { title: t2 || t1 || 'Секция', body: [] };
+        } else {
+          if (!current) current = { title: 'Секция', body: [] };
+          current.body.push(line);
+        }
+      });
+      if (current) sections.push(current);
+
+      // Преобразуем секции в слайды; извлекаем списки и таблицы (Markdown)
+      customSlides = sections.map((sec, index) => {
+        const items: string[] = [];
+        const tableRows: string[][] = [];
+        let inTable = false;
+        let headerParsed = false;
+        sec.body.forEach((l) => {
+          const trimmed = l.trim();
+          if (/^\|.*\|$/.test(trimmed)) {
+            const cols = trimmed.slice(1, -1).split('|').map(c => c.trim());
+            if (!headerParsed) {
+              // заголовок таблицы
+              tableRows.push(cols);
+              headerParsed = true;
+              inTable = true;
+            } else {
+              // строка таблицы
+              tableRows.push(cols);
+            }
+            return;
+          }
+          if (/^\s*[-*+]\s+/.test(trimmed) || /^\s*\d+\.\s+/.test(trimmed)) {
+            items.push(l); // сохраняем с отступами для дальнейшей иерархии
+            return;
+          }
+          if (trimmed) items.push(trimmed);
         });
+
+        const content = tableRows.length > 0 ? tableRows.map(r => r.join(' | ')) : items;
+
+        return {
+          slideNumber: index + 1,
+          title: sec.title || `Слайд ${index + 1}`,
+          content,
+          layout: tableRows.length > 0 ? 'content' : 'content',
+          speakerNotes: `Заметки для слайда "${sec.title}". ${request.contextField || ''}`
+        };
+      });
     }
 
     // Если есть пользовательская структура, используем её

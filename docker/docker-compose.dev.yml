@@ -24,6 +24,9 @@ services:
       - ../backend/src:/app/src
       - ../backend/package.json:/app/package.json
       - ../shared:/app/shared
+      - ../backend/exports:/app/exports
+      - ../backend/temp:/app/temp
+      - ../backend/uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
